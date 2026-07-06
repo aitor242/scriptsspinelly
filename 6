@@ -1,0 +1,219 @@
+
+Entiendo perfectamente el problema. Quieres que el personaje se quede permanentemente en la base después de teletransportarse, no solo unos segundos. Aquí tienes la versión corregida:
+
+```lua
+-- Script de teletransportación PERMANENTE para Steal a Brainrot
+-- El personaje se queda permanentemente en la base
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Variables para almacenar coordenadas
+local basePosition = nil
+local baseCFrame = nil
+local isTeleported = false
+
+-- Crear GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game:GetService("CoreGui")
+screenGui.Name = "TeleportScript"
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.Size = UDim2.new(0, 200, 0, 140)
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+local markBaseButton = Instance.new("TextButton")
+markBaseButton.Parent = mainFrame
+markBaseButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+markBaseButton.BorderSizePixel = 0
+markBaseButton.Position = UDim2.new(0, 10, 0, 10)
+markBaseButton.Size = UDim2.new(0, 180, 0, 35)
+markBaseButton.Font = Enum.Font.SourceSans
+markBaseButton.Text = "Marcar Base"
+markBaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+markBaseButton.TextSize = 18
+
+local teleportButton = Instance.new("TextButton")
+teleportButton.Parent = mainFrame
+teleportButton.BackgroundColor3 = Color3.fromRGB(215, 0, 0)
+teleportButton.BorderSizePixel = 0
+teleportButton.Position = UDim2.new(0, 10, 0, 55)
+teleportButton.Size = UDim2.new(0, 180, 0, 35)
+teleportButton.Font = Enum.Font.SourceSans
+teleportButton.Text = "Teletransportarse"
+teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+teleportButton.TextSize = 18
+
+local releaseButton = Instance.new("TextButton")
+releaseButton.Parent = mainFrame
+releaseButton.BackgroundColor3 = Color3.fromRGB(120, 120, 0)
+releaseButton.BorderSizePixel = 0
+releaseButton.Position = UDim2.new(0, 10, 0, 100)
+releaseButton.Size = UDim2.new(0, 180, 0, 30)
+releaseButton.Font = Enum.Font.SourceSans
+releaseButton.Text = "Liberar Movimiento"
+releaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+releaseButton.TextSize = 14
+
+-- Función para guardar las coordenadas actuales
+markBaseButton.MouseButton1Click:Connect(function()
+    local character = LocalPlayer.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        -- Guardar tanto posición como rotación
+        basePosition = character.HumanoidRootPart.Position
+        baseCFrame = character.HumanoidRootPart.CFrame
+        
+        markBaseButton.Text = "Base Guardada ✓"
+        wait(1)
+        markBaseButton.Text = "Marcar Base"
+        
+        -- Notificación visual con coordenadas
+        local notification = Instance.new("TextLabel")
+        notification.Parent = screenGui
+        notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        notification.BorderSizePixel = 0
+        notification.Position = UDim2.new(0.5, -100, 0, 50)
+        notification.Size = UDim2.new(0, 200, 0, 30)
+        notification.Font = Enum.Font.SourceSansBold
+        notification.Text = "Posición: " .. math.floor(basePosition.X) .. ", " .. math.floor(basePosition.Y) .. ", " .. math.floor(basePosition.Z)
+        notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+        notification.TextSize = 14
+        notification.BackgroundTransparency = 0.3
+        
+        game:GetService("Debris"):AddItem(notification, 3)
+    end
+end)
+
+-- Función de teletransportación PERMANENTE
+teleportButton.MouseButton1Click:Connect(function()
+    if not basePosition or not baseCFrame then
+        teleportButton.Text = "Marca una base primero"
+        wait(1)
+        teleportButton.Text = "Teletransportarse"
+        return
+    end
+    
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        teleportButton.Text = "Error: Personaje no encontrado"
+        wait(1)
+        teleportButton.Text = "Teletransportarse"
+        return
+    end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local humanoid = character:FindFirstChild("Humanoid")
+    
+    -- Desactivar temporalmente el humanoid para evitar interferencias
+    if humanoid then
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+    end
+    
+    -- Método agresivo de teletransportación
+    humanoidRootPart.Anchored = true
+    humanoidRootPart.CFrame = baseCFrame
+    wait(0.1)
+    humanoidRootPart.Anchored = false
+    
+    -- Desactivar la capacidad de movimiento del personaje
+    if humanoid then
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        humanoid.AutoRotate = false
+    end
+    
+    -- Marcar como teletransportado permanentemente
+    isTeleported = true
+    
+    -- Notificación visual
+    local notification = Instance.new("TextLabel")
+    notification.Parent = screenGui
+    notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    notification.BorderSizePixel = 0
+    notification.Position = UDim2.new(0.5, -100, 0, 50)
+    notification.Size = UDim2.new(0, 200, 0, 30)
+    notification.Font = Enum.Font.SourceSansBold
+    notification.Text = "Teleportación PERMANENTE"
+    notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notification.TextSize = 14
+    notification.BackgroundTransparency = 0.3
+    
+    game:GetService("Debris"):AddItem(notification, 2)
+end)
+
+-- Botón para liberar el movimiento
+releaseButton.MouseButton1Click:Connect(function()
+    isTeleported = false
+    
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
+            humanoid.JumpPower = 50
+            humanoid.AutoRotate = true
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end
+    
+    releaseButton.Text = "Movimiento liberado"
+    wait(1)
+    releaseButton.Text = "Liberar Movimiento"
+end)
+
+-- Bucle para mantener permanentemente al personaje en la posición
+RunService.Heartbeat:Connect(function()
+    if isTeleported and basePosition then
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            local humanoidRootPart = character.HumanoidRootPart
+            
+            -- Forzar constantemente la posición
+            humanoidRootPart.CFrame = baseCFrame
+            
+            -- Asegurar que no pueda moverse
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = 0
+                humanoid.JumpPower = 0
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            end
+        end
+    end
+end)
+
+-- Bypass anti-cheat mejorado
+for _, remote in pairs(game:GetDescendants()) do
+    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+        if remote.Name:lower():find("kick") or remote.Name:lower():find("ban") or 
+           remote.Name:lower():find("report") or remote.Name:lower():find("cheat") or
+           remote.Name:lower():find("detect") or remote.Name:lower():find("anticheat") or
+           remote.Name:lower():find("teleport") or remote.Name:lower():find("move") then
+            pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    remote:Destroy()
+                elseif remote:IsA("RemoteFunction") then
+                    remote:Destroy()
+                end
+            end)
+        end
+    end
+end
+
+-- Notificación de que el script está cargado
+local loadNotification = Instance.new("TextLabel")
+loadNotification.Parent = screenGui
+loadNotification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+loadNotification.BorderSizePixel = 0
+loadNotification.Position = UDim2.new(0.5, -100, 0, 50)
+loadNotification.Size = UDim2.new(0, 200, 0, 30)
+loadNotification.Font = Enum.Font.SourceSansBold
+loadNotification.Text = "Script de teletransportación PERMANENTE cargado"
+loadNotification.TextColor3
