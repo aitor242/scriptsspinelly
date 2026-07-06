@@ -1,17 +1,17 @@
--- Steal a Brainrot Script para Xeno
--- Creado para auto-steal y teletransportación a base
+-- Steal a Brainrot Script para Xeno - Versión Mejorada
+-- Teletransportación instantánea al recoger el brainrot
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 -- Variables
 local basePosition = nil
 local autoStealEnabled = false
-local hasBrainrot = false
 local brainrotName = "Brainrot" -- Cambia esto si el objeto tiene otro nombre
+local hasBrainrot = false
+local lastBrainrotCheck = 0
 
 -- Crear GUI
 local screenGui = Instance.new("ScreenGui")
@@ -49,34 +49,37 @@ autoStealButton.Text = "Auto Steal: OFF"
 autoStealButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 autoStealButton.TextSize = 18
 
--- Función para teletransportarse a la base
+-- Función para teletransportarse instantáneamente a la base
 local function teleportToBase()
-    if basePosition then
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChild("HumanoidRootPart") then
-            -- Crear una teletransportación sin lag
-            local humanoidRootPart = character.HumanoidRootPart
-            local oldCFrame = humanoidRootPart.CFrame
-            
-            -- Teletransportación instantánea
-            humanoidRootPart.CFrame = CFrame.new(basePosition)
-            
-            -- Asegurar que el personaje se haya teletransportado correctamente
-            wait(0.1)
-            if (humanoidRootPart.Position - basePosition).Magnitude > 10 then
-                -- Intento alternativo si falló
-                humanoidRootPart.CFrame = CFrame.new(basePosition + Vector3.new(0, 5, 0))
-            end
-        end
-    else
-        LocalPlayer:Kick("Debes marcar una base primero")
+    if not basePosition then
+        return false
     end
+    
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    -- Teletransportación instantánea sin lag
+    local humanoidRootPart = character.HumanoidRootPart
+    
+    -- Desactivar temporalmente el sistema de física para evitar detección
+    humanoidRootPart.Anchored = true
+    
+    -- Teletransportación directa
+    humanoidRootPart.CFrame = CFrame.new(basePosition)
+    
+    -- Reactivar la física
+    humanoidRootPart.Anchored = false
+    
+    return true
 end
 
 -- Función para comprobar si tenemos el brainrot
 local function checkForBrainrot()
     local character = LocalPlayer.Character
     if character then
+        -- Comprobar en el personaje
         for _, item in pairs(character:GetChildren()) do
             if item.Name == brainrotName and item:IsA("Tool") then
                 return true
@@ -96,55 +99,25 @@ local function checkForBrainrot()
     return false
 end
 
--- Función para encontrar y robar el brainrot más cercano
-local function findAndStealBrainrot()
-    if not autoStealEnabled then return end
-    
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local humanoidRootPart = character.HumanoidRootPart
-    local closestBrainrot = nil
-    local closestDistance = math.huge
-    
-    -- Buscar todos los brainrots en el workspace
-    for _, item in pairs(workspace:GetDescendants()) do
-        if item.Name == brainrotName and item:IsA("Tool") then
-            local distance = (humanoidRootPart.Position - item.Position).Magnitude
-            if distance < closestDistance then
-                closestDistance = distance
-                closestBrainrot = item
-            end
-        end
-    end
-    
-    -- Si encontramos un brainrot, nos movemos hacia él
-    if closestBrainrot then
-        -- Teletransportarse directamente al brainrot para evitar lag
-        humanoidRootPart.CFrame = CFrame.new(closestBrainrot.Position + Vector3.new(0, 2, 0))
-        
-        -- Esperar un momento para recogerlo
-        wait(0.2)
-        
-        -- Comprobar si lo hemos recogido
-        if checkForBrainrot() then
-            hasBrainrot = true
-            teleportToBase()
-        end
-    end
-end
-
 -- Eventos de botones
 markBaseButton.MouseButton1Click:Connect(function()
     local character = LocalPlayer.Character
     if character and character:FindFirstChild("HumanoidRootPart") then
         basePosition = character.HumanoidRootPart.Position
-        LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("Chat"):FindFirstChild("ChatBar"):Focus()
-        game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest"):FireServer("Base marcada correctamente", "All")
+        markBaseButton.Text = "Base Guardada ✓"
+        wait(1)
+        markBaseButton.Text = "Marcar Base"
     end
 end)
 
 autoStealButton.MouseButton1Click:Connect(function()
+    if not basePosition then
+        autoStealButton.Text = "Marca Base Primero"
+        wait(1)
+        autoStealButton.Text = "Auto Steal: OFF"
+        return
+    end
+    
     autoStealEnabled = not autoStealEnabled
     if autoStealEnabled then
         autoStealButton.BackgroundColor3 = Color3.fromRGB(215, 0, 0)
@@ -155,35 +128,69 @@ autoStealButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Bucle principal para el auto steal
+-- Bucle principal para detectar cuando recogemos el brainrot
 RunService.Heartbeat:Connect(function()
-    if autoStealEnabled then
-        -- Comprobar si ya tenemos el brainrot
-        if not hasBrainrot and checkForBrainrot() then
-            hasBrainrot = true
-            teleportToBase()
-        elseif hasBrainrot and not checkForBrainrot() then
-            hasBrainrot = false
-        elseif not hasBrainrot then
-            findAndStealBrainrot()
-        end
+    if not autoStealEnabled then return end
+    
+    -- Limitar las comprobaciones para evitar lag
+    local currentTime = tick()
+    if currentTime - lastBrainrotCheck < 0.1 then return end
+    lastBrainrotCheck = currentTime
+    
+    -- Comprobar si tenemos el brainrot
+    local currentlyHasBrainrot = checkForBrainrot()
+    
+    -- Si acabamos de recoger el brainrot, teletransportarnos a la base
+    if currentlyHasBrainrot and not hasBrainrot then
+        hasBrainrot = true
+        teleportToBase()
+    elseif not currentlyHasBrainrot then
+        hasBrainrot = false
     end
 end)
 
--- Bypass anti-cheat básico
-local originalFireServer = nil
+-- Bypass anti-cheat mejorado
+local originalFireServer = {}
+local originalInvokeServer = {}
+
+-- Interceptamos todos los RemoteEvents y RemoteFunctions para evitar detección
 for _, remote in pairs(game:GetDescendants()) do
-    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-        if remote.Name:lower():find("kick") or remote.Name:lower():find("ban") or remote.Name:lower():find("report") then
-            originalFireServer = remote.FireServer
+    if remote:IsA("RemoteEvent") then
+        if remote.Name:lower():find("kick") or remote.Name:lower():find("ban") or 
+           remote.Name:lower():find("report") or remote.Name:lower():find("cheat") or
+           remote.Name:lower():find("detect") or remote.Name:lower():find("anticheat") then
+            originalFireServer[remote] = remote.FireServer
             remote.FireServer = function(...) end
+        end
+    elseif remote:IsA("RemoteFunction") then
+        if remote.Name:lower():find("kick") or remote.Name:lower():find("ban") or 
+           remote.Name:lower():find("report") or remote.Name:lower():find("cheat") or
+           remote.Name:lower():find("detect") or remote.Name:lower():find("anticheat") then
+            originalInvokeServer[remote] = remote.InvokeServer
+            remote.InvokeServer = function(...) return nil end
         end
     end
 end
 
--- Anti-detección adicional
+-- Bloquear mensajes de error del sistema
 game:GetService("ScriptContext").ErrorOutput:Connect(function(message)
-    if message:find("kick") or message:find("ban") or message:find("cheat") then
+    if message:find("kick") or message:find("ban") or message:find("cheat") or 
+       message:find("detect") or message:find("anticheat") then
         return true -- Bloquear mensajes de detección
     end
 end)
+
+-- Notificación de que el script está cargado
+local notification = Instance.new("TextLabel")
+notification.Parent = screenGui
+notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+notification.BorderSizePixel = 0
+notification.Position = UDim2.new(0.5, -100, 0, 50)
+notification.Size = UDim2.new(0, 200, 0, 30)
+notification.Font = Enum.Font.SourceSansBold
+notification.Text = "Script cargado correctamente"
+notification.TextColor3 = Color3.fromRGB(255, 255, 255)
+notification.TextSize = 18
+notification.BackgroundTransparency = 0.3
+
+game:GetService("Debris"):AddItem(notification, 3)
