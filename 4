@@ -1,0 +1,141 @@
+-- Script ultra simplificado para Steal a Brainrot
+-- Solo teletransportación instantánea al recoger el brainrot
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Variables
+local basePosition = nil
+local autoStealEnabled = false
+local brainrotName = "Brainrot" -- Ajusta este nombre si es necesario
+local lastCheckTime = 0
+
+-- Crear interfaz simple
+local gui = Instance.new("ScreenGui")
+gui.Parent = game:GetService("CoreGui")
+gui.Name = "BrainrotStealer"
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.new(0, 200, 0, 80)
+frame.Position = UDim2.new(0, 10, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+frame.Active = true
+frame.Draggable = true
+
+local btnBase = Instance.new("TextButton")
+btnBase.Parent = frame
+btnBase.Size = UDim2.new(0, 180, 0, 30)
+btnBase.Position = UDim2.new(0, 10, 0, 10)
+btnBase.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+btnBase.Text = "Marcar Base"
+btnBase.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnBase.TextSize = 14
+
+local btnAuto = Instance.new("TextButton")
+btnAuto.Parent = frame
+btnAuto.Size = UDim2.new(0, 180, 0, 30)
+btnAuto.Position = UDim2.new(0, 10, 0, 45)
+btnAuto.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+btnAuto.Text = "Auto Steal: OFF"
+btnAuto.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnAuto.TextSize = 14
+
+-- Función de teletransportación instantánea
+local function teleportToBase()
+    if not basePosition then return false end
+    
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+    
+    -- Teletransportación directa sin animaciones
+    char.HumanoidRootPart.CFrame = CFrame.new(basePosition)
+    return true
+end
+
+-- Función para detectar si tenemos el brainrot
+local function hasBrainrot()
+    local char = LocalPlayer.Character
+    if char then
+        -- Revisa en el personaje
+        for _, item in pairs(char:GetChildren()) do
+            if item:IsA("Tool") and item.Name == brainrotName then
+                return true
+            end
+        end
+        
+        -- Revisa en el inventario
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            for _, item in pairs(backpack:GetChildren()) do
+                if item:IsA("Tool") and item.Name == brainrotName then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Botón para marcar base
+btnBase.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        basePosition = char.HumanoidRootPart.Position
+        btnBase.Text = "Base ✓"
+        wait(1)
+        btnBase.Text = "Marcar Base"
+    end
+end)
+
+-- Botón para activar/desactivar auto steal
+btnAuto.MouseButton1Click:Connect(function()
+    if not basePosition then
+        btnAuto.Text = "Marca base primero"
+        wait(1)
+        btnAuto.Text = "Auto Steal: OFF"
+        return
+    end
+    
+    autoStealEnabled = not autoStealEnabled
+    btnAuto.Text = autoStealEnabled and "Auto Steal: ON" or "Auto Steal: OFF"
+    btnAuto.BackgroundColor3 = autoStealEnabled and Color3.fromRGB(215, 0, 0) or Color3.fromRGB(0, 120, 215)
+end)
+
+-- Variable para rastrear si ya teníamos el brainrot
+local hadBrainrot = false
+
+-- Bucle principal de detección
+RunService.Heartbeat:Connect(function()
+    if not autoStealEnabled then return end
+    
+    -- Limitar comprobaciones para no causar lag
+    local currentTime = tick()
+    if currentTime - lastCheckTime < 0.05 then return end
+    lastCheckTime = currentTime
+    
+    -- Comprobar si acabamos de obtener el brainrot
+    local currentlyHasBrainrot = hasBrainrot()
+    
+    -- Si no lo teníamos y ahora sí lo tenemos, teletransportar
+    if currentlyHasBrainrot and not hadBrainrot then
+        teleportToBase()
+    end
+    
+    hadBrainrot = currentlyHasBrainrot
+end)
+
+-- Bypass anti-cheat simple pero efectivo
+for _, remote in pairs(game:GetDescendants()) do
+    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+        if remote.Name:lower():find("kick") or remote.Name:lower():find("ban") or 
+           remote.Name:lower():find("report") or remote.Name:lower():find("cheat") then
+            if remote:IsA("RemoteEvent") then
+                remote:Destroy()
+            elseif remote:IsA("RemoteFunction") then
+                remote:Destroy()
+            end
+        end
+    end
+end
